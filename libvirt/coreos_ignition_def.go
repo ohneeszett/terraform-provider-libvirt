@@ -31,21 +31,25 @@ func newIgnitionDef() defIgnition {
 // Create a ISO file based on the contents of the CloudInit instance and
 // uploads it to the libVirt pool
 // Returns a string holding terraform's internal ID of this resource
-func (ign *defIgnition) CreateAndUpload(virConn *libvirt.Connect) (string, error) {
+func (ign *defIgnition) CreateAndUpload(virConn *libvirt.Connect, poolSync *LibVirtPoolSync) (string, error) {
 	pool, err := virConn.LookupStoragePoolByName(ign.PoolName)
 	if err != nil {
-		return "", fmt.Errorf("can't find storage pool '%s'", ign.PoolName)
+		return "", fmt.Errorf("can't find storage pool '%s': %v", ign.PoolName, err)
 	}
 	defer pool.Free()
 
-	PoolSync.AcquireLock(ign.PoolName)
-	defer PoolSync.ReleaseLock(ign.PoolName)
+	lock := poolSync.GetLock(ign.PoolName)
+	lock.Lock()
+	defer lock.Unlock()
 
 	// Refresh the pool of the volume so that libvirt knows it is
 	// not longer in use.
-	WaitForSuccess("Error refreshing pool for volume", func() error {
+	err = WaitForSuccess("Error refreshing pool for volume", func() error {
 		return pool.Refresh(0)
 	})
+	if err != nil {
+		return "", err
+	}
 
 	volumeDef := newDefVolume()
 	volumeDef.Name = ign.Name

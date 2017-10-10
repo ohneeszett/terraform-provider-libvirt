@@ -38,6 +38,7 @@ func resourceIgnitionCreate(d *schema.ResourceData, meta interface{}) error {
 	if virConn == nil {
 		return fmt.Errorf("The libvirt connection was nil.")
 	}
+	poolSync := meta.(*Client).PoolSync
 
 	ignition := newIgnitionDef()
 
@@ -47,7 +48,7 @@ func resourceIgnitionCreate(d *schema.ResourceData, meta interface{}) error {
 
 	log.Printf("[INFO] ignition: %+v", ignition)
 
-	key, err := ignition.CreateAndUpload(virConn)
+	key, err := ignition.CreateAndUpload(virConn, poolSync)
 	if err != nil {
 		return err
 	}
@@ -85,11 +86,12 @@ func resourceIgnitionDelete(d *schema.ResourceData, meta interface{}) error {
 	if virConn == nil {
 		return fmt.Errorf("The libvirt connection was nil.")
 	}
+	poolSync := meta.(*Client).PoolSync
 
 	key, err := getIgnitionVolumeKeyFromTerraformID(d.Id())
 	if err != nil {
 		return err
 	}
 
-	return RemoveVolume(virConn, key)
+	return RemoveVolume(virConn, key, poolSync)
 }

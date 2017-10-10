@@ -90,20 +90,25 @@ func resourceLibvirtVolumeCreate(d *schema.ResourceData, meta interface{}) error
 		poolName = d.Get("pool").(string)
 	}
 
-	PoolSync.AcquireLock(poolName)
-	defer PoolSync.ReleaseLock(poolName)
+	poolSync := meta.(*Client).PoolSync
+	lock := poolSync.GetLock(poolName)
+	lock.Lock()
+	defer lock.Unlock()
 
 	pool, err := virConn.LookupStoragePoolByName(poolName)
 	if err != nil {
-		return fmt.Errorf("can't find storage pool '%s'", poolName)
+		return fmt.Errorf("can't find storage pool '%s': %v", poolName, err)
 	}
 	defer pool.Free()
 
 	// Refresh the pool of the volume so that libvirt knows it is
 	// not longer in use.
-	WaitForSuccess("Error refreshing pool for volume", func() error {
+	err = WaitForSuccess("Error refreshing pool for volume", func() error {
 		return pool.Refresh(0)
 	})
+	if err != nil {
+		return err
+	}
 
 	volumeDef := newDefVolume()
 
@@ -203,7 +208,7 @@ func resourceLibvirtVolumeCreate(d *schema.ResourceData, meta interface{}) error
 			baseVolumePoolName := d.Get("base_volume_pool").(string)
 			baseVolumePool, err = virConn.LookupStoragePoolByName(baseVolumePoolName)
 			if err != nil {
-				return fmt.Errorf("can't find storage pool '%s'", baseVolumePoolName)
+				return fmt.Errorf("can't find storage pool '%s': %v", baseVolumePoolName, err)
 			}
 			defer baseVolumePool.Free()
 		}
@@ -336,6 +341,7 @@ func resourceLibvirtVolumeDelete(d *schema.ResourceData, meta interface{}) error
 	if virConn == nil {
 		return fmt.Errorf("The libvirt connection was nil.")
 	}
+	poolSync := meta.(*Client).PoolSync
 
-	return RemoveVolume(virConn, d.Id())
+	return RemoveVolume(virConn, d.Id(), poolSync)
 }

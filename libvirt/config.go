@@ -11,7 +11,8 @@ type Config struct {
 }
 
 type Client struct {
-	libvirt *libvirt.Connect
+	libvirt  *libvirt.Connect
+	PoolSync *LibVirtPoolSync
 }
 
 func (c *Config) Client() (*Client, error) {
@@ -21,7 +22,8 @@ func (c *Config) Client() (*Client, error) {
 	}
 
 	client := &Client{
-		libvirt: conn,
+		libvirt:  conn,
+		PoolSync: NewLibVirtPoolSync(),
 	}
 
 	log.Println("[INFO] Created libvirt client")

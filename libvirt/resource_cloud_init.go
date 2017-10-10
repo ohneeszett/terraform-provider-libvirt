@@ -49,6 +49,7 @@ func resourceCloudInitCreate(d *schema.ResourceData, meta interface{}) error {
 	if virConn == nil {
 		return fmt.Errorf("The libvirt connection was nil.")
 	}
+	poolSync := meta.(*Client).PoolSync
 
 	cloudInit := newCloudInitDef()
 	cloudInit.Metadata.LocalHostname = d.Get("local_hostname").(string)
@@ -66,7 +67,7 @@ func resourceCloudInitCreate(d *schema.ResourceData, meta interface{}) error {
 
 	log.Printf("[INFO] cloudInit: %+v", cloudInit)
 
-	key, err := cloudInit.CreateAndUpload(virConn)
+	key, err := cloudInit.CreateAndUpload(virConn, poolSync)
 	if err != nil {
 		return err
 	}
@@ -109,11 +110,12 @@ func resourceCloudInitDelete(d *schema.ResourceData, meta interface{}) error {
 	if virConn == nil {
 		return fmt.Errorf("The libvirt connection was nil.")
 	}
+	poolSync := meta.(*Client).PoolSync
 
 	key, err := getCloudInitVolumeKeyFromTerraformID(d.Id())
 	if err != nil {
 		return err
 	}
 
-	return RemoveVolume(virConn, key)
+	return RemoveVolume(virConn, key, poolSync)
 }

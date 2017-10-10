@@ -24,8 +24,6 @@ type DomainMeta struct {
 	ifaces chan libvirtxml.DomainInterface
 }
 
-var PoolSync = NewLibVirtPoolSync()
-
 func init() {
 	spew.Config.Indent = "\t"
 }

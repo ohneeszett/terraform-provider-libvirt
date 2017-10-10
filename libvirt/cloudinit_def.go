@@ -50,7 +50,7 @@ func newCloudInitDef() defCloudInit {
 // Create a ISO file based on the contents of the CloudInit instance and
 // uploads it to the libVirt pool
 // Returns a string holding terraform's internal ID of this resource
-func (ci *defCloudInit) CreateAndUpload(virConn *libvirt.Connect) (string, error) {
+func (ci *defCloudInit) CreateAndUpload(virConn *libvirt.Connect, poolSync *LibVirtPoolSync) (string, error) {
 	iso, err := ci.createISO()
 	if err != nil {
 		return "", err
@@ -58,18 +58,13 @@ func (ci *defCloudInit) CreateAndUpload(virConn *libvirt.Connect) (string, error
 
 	pool, err := virConn.LookupStoragePoolByName(ci.PoolName)
 	if err != nil {
-		return "", fmt.Errorf("can't find storage pool '%s'", ci.PoolName)
+		return "", fmt.Errorf("can't find storage pool '%s': %v", ci.PoolName, err)
 	}
 	defer pool.Free()
 
-	PoolSync.AcquireLock(ci.PoolName)
-	defer PoolSync.ReleaseLock(ci.PoolName)
-
-	// Refresh the pool of the volume so that libvirt knows it is
-	// not longer in use.
-	WaitForSuccess("Error refreshing pool for volume", func() error {
-		return pool.Refresh(0)
-	})
+	lock := poolSync.GetLock(ci.PoolName)
+	lock.Lock()
+	defer lock.Unlock()
 
 	volumeDef := newDefVolume()
 	volumeDef.Name = ci.Name
