@@ -1,4 +1,4 @@
-package http
+package ioutil
 
 import (
 	"bytes"
@@ -35,7 +35,7 @@ func TestRemoteImageDownloadRetry(t *testing.T) {
 	defer server.Close()
 
 	start := time.Now()
-	reader, err := NewReader(server.URL)
+	reader, err := NewHTTPReader(server.URL)
 	if err != nil {
 		t.Errorf("Could not create an HTTP reader: %v", err)
 	}
@@ -56,7 +56,7 @@ func TestRemoteImageDownloadRetry(t *testing.T) {
 	defer server.Close()
 
 	start = time.Now()
-	reader, err = NewReader(server.URL)
+	reader, err = NewHTTPReader(server.URL)
 	if err != nil {
 		t.Errorf("Could not create an HTTP reader: %v", err)
 	}
@@ -76,7 +76,7 @@ func TestRemoteImageDownloadRetry(t *testing.T) {
 	server = newErrorServer([]int{304})
 	defer server.Close()
 
-	reader, err = NewReader(server.URL)
+	reader, err = NewHTTPReader(server.URL)
 	if err != nil {
 		t.Errorf("Could not create an HTTP reader: %v", err)
 	}

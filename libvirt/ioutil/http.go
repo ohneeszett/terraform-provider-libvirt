@@ -1,4 +1,4 @@
-package http
+package ioutil
 
 import (
 	"errors"
@@ -13,13 +13,13 @@ var ErrNotModified = errors.New("http: Not modified")
 
 // The HTTP reader allows to threat the full request-response cycle
 // as a reader.
-type Reader struct {
+type HTTPReader struct {
 	url             string
 	response        *http.Response
 	ifModifiedSince *time.Time
 }
 
-func (r *Reader) String() string {
+func (r *HTTPReader) String() string {
 	return r.url
 }
 
@@ -28,12 +28,12 @@ func (r *Reader) String() string {
 //
 // If the data has not been modified since, reading will
 // return a ErrNotModified error.
-func (r *Reader) SetIfModifiedSince(t time.Time) {
+func (r *HTTPReader) SetIfModifiedSince(t time.Time) {
 	*r.ifModifiedSince = t
 }
 
 // Returns the length of the data according to server-side
-func (r *Reader) Size() (uint64, error) {
+func (r *HTTPReader) Size() (uint64, error) {
 	response, err := http.Head(r.url)
 	if err != nil {
 		return 0, err
@@ -67,14 +67,14 @@ func (r *Reader) Size() (uint64, error) {
 	return uint64(length), nil
 }
 
-func NewReader(url string) (*Reader, error) {
-	return &Reader{url: url}, nil
+func NewHTTPReader(url string) (*HTTPReader, error) {
+	return &HTTPReader{url: url}, nil
 }
 
-//func (b *Reader) Peek(n int) ([]byte, error) {
+//func (b *HTTPReader) Peek(n int) ([]byte, error) {
 //}
 
-func (r *Reader) Read(p []byte) (int, error) {
+func (r *HTTPReader) Read(p []byte) (int, error) {
 	err := r.doRequest()
 	if err != nil {
 		return 0, err
@@ -82,14 +82,14 @@ func (r *Reader) Read(p []byte) (int, error) {
 	return r.response.Body.Read(p)
 }
 
-func (r *Reader) Close() error {
+func (r *HTTPReader) Close() error {
 	if r.response != nil {
 		return r.response.Body.Close()
 	}
 	return nil
 }
 
-func (r *Reader) doRequest() error {
+func (r *HTTPReader) doRequest() error {
 	if r.response != nil {
 		return nil
 	}
