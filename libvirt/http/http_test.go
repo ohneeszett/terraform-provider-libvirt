@@ -72,4 +72,22 @@ func TestRemoteImageDownloadRetry(t *testing.T) {
 	if len(data) != 0 {
 		t.Fatalf("Expected not reading anything")
 	}
+
+	server = newErrorServer([]int{304})
+	defer server.Close()
+
+	reader, err = NewReader(server.URL)
+	if err != nil {
+		t.Errorf("Could not create an HTTP reader: %v", err)
+	}
+	defer reader.Close()
+
+	data, err = ioutil.ReadAll(reader)
+	if err != ErrNotModified {
+		t.Fatalf("Expected to fail with %v", ErrNotModified)
+	}
+	if len(data) != 0 {
+		t.Fatalf("Expected not reading anything")
+	}
+
 }
