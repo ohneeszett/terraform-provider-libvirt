@@ -50,6 +50,16 @@ func NewReader(r io.Reader) *AnyReader {
 	return &AnyReader{r: r}
 }
 
+func (r *AnyReader) Close() error {
+	if r.r != nil {
+		closer, ok := (r.r).(io.Closer)
+		if ok {
+			return closer.Close()
+		}
+	}
+	return nil
+}
+
 func (r *AnyReader) Read(b []byte) (n int, err error) {
 	if !r.decided {
 		err = r.decide()
