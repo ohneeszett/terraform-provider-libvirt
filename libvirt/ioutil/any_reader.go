@@ -46,7 +46,7 @@ type AnyReader struct {
 	decided bool
 }
 
-func NewReader(r io.Reader) *AnyReader {
+func NewAnyReader(r io.Reader) *AnyReader {
 	return &AnyReader{r: r}
 }
 
