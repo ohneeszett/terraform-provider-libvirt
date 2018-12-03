@@ -1,9 +1,9 @@
 package ioutil
 
 import (
-	"testing"
-	"io/ioutil"
 	"github.com/stretchr/testify/assert"
+	"io/ioutil"
+	"testing"
 )
 
 func TestPathReader(t *testing.T) {

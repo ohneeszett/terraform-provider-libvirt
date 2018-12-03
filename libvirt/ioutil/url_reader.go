@@ -2,8 +2,8 @@ package ioutil
 
 import (
 	"fmt"
-	"strings"
 	"net/url"
+	"strings"
 )
 
 type URLReader interface {

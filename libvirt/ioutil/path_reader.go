@@ -5,8 +5,8 @@ import (
 )
 
 type PathReader struct {
-	path       string
-	file       *os.File
+	path string
+	file *os.File
 }
 
 func NewPathReader(path string) (*PathReader, error) {
@@ -25,7 +25,6 @@ func (r *PathReader) Size() (int64, error) {
 	return int64(fi.Size()), nil
 }
 
-
 func (r *PathReader) Close() error {
 	if r.file != nil {
 		return r.file.Close()
@@ -36,4 +35,3 @@ func (r *PathReader) Close() error {
 func (r *PathReader) Read(b []byte) (n int, err error) {
 	return r.file.Read(b)
 }
-
