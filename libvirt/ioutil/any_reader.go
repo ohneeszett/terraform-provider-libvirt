@@ -27,6 +27,7 @@ import (
 )
 
 var NotSupported = errors.New("The file type is not yet supported")
+var ErrUnknownSize = errors.New("size of stream can't be determined")
 
 // Don't use standard file detection software / libmagic as it requires >= 128 bytes to be read.
 // https://en.wikipedia.org/wiki/List_of_file_signatures
@@ -48,6 +49,16 @@ type AnyReader struct {
 
 func NewAnyReader(r io.Reader) *AnyReader {
 	return &AnyReader{r: r}
+}
+
+func (r *AnyReader) Size() (int64, error) {
+	if r.r != nil {
+		sized, ok := (r.r).(sizedReader)
+		if ok {
+			return sized.Size()
+		}
+	}
+	return -1, ErrUnknownSize
 }
 
 func (r *AnyReader) Close() error {
