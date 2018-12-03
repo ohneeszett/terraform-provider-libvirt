@@ -47,8 +47,8 @@ type AnyReader struct {
 	decided bool
 }
 
-func NewAnyReader(r io.Reader) *AnyReader {
-	return &AnyReader{r: r}
+func NewAnyReader(r io.Reader) (*AnyReader, error) {
+	return &AnyReader{r: r}, nil
 }
 
 func (r *AnyReader) Size() (int64, error) {

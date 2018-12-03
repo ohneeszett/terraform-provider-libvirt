@@ -32,7 +32,8 @@ import (
 )
 
 func TestReadEmpty(t *testing.T) {
-	r := NewAnyReader(strings.NewReader(""))
+	r, err := NewAnyReader(strings.NewReader(""))
+	assert.NoError(t, err)
 	b := make([]byte, 12)
 	n, err := r.Read(b)
 	assert.EqualValues(t, 0, n)
@@ -41,7 +42,9 @@ func TestReadEmpty(t *testing.T) {
 
 func TestReadPlain(t *testing.T) {
 	const str = "HelloWorld"
-	r := NewAnyReader(strings.NewReader(str))
+	r, err := NewAnyReader(strings.NewReader(str))
+	assert.NoError(t, err)
+
 	b := make([]byte, len(str)+12)
 	n, err := r.Read(b)
 	assert.NoError(t, err)
@@ -55,7 +58,9 @@ func TestReadPlain(t *testing.T) {
 
 func TestReadPlainShortReads(t *testing.T) {
 	const str = "HelloWorld"
-	r := NewAnyReader(strings.NewReader(str))
+	r, err := NewAnyReader(strings.NewReader(str))
+	assert.NoError(t, err)
+
 	b := make([]byte, 1)
 	for i := range str {
 		n, err := r.Read(b)
@@ -73,7 +78,9 @@ func TestReadEmptyGZIP(t *testing.T) {
 	gz := gzip.NewWriter(buff)
 	gz.Close()
 
-	r := NewAnyReader(buff)
+	r, err := NewAnyReader(buff)
+	assert.NoError(t, err)
+
 	b, err := ioutil.ReadAll(r)
 	require.NoError(t, err)
 	assert.Empty(t, b)
@@ -85,7 +92,8 @@ func TestReadGZIP(t *testing.T) {
 	fmt.Fprint(gz, "Hello World")
 	gz.Close()
 
-	r := NewAnyReader(buff)
+	r, err := NewAnyReader(buff)
+	assert.NoError(t, err)
 	b, err := ioutil.ReadAll(r)
 	require.NoError(t, err)
 	assert.EqualValues(t, "Hello World", string(b))
@@ -95,7 +103,9 @@ func TestReadXZ(t *testing.T) {
 	compressed := `/Td6WFoAAATm1rRGAgAhARYAAAB0L+WjAQAKSGVsbG8gV29ybGQAAMbNtcdndHQ+AAEjC8Ib/QkftvN9AQAAAAAEWVo=`
 	r := base64.NewDecoder(base64.StdEncoding, strings.NewReader(compressed))
 
-	r = NewAnyReader(r)
+	r, err := NewAnyReader(r)
+	assert.NoError(t, err)
+
 	b, err := ioutil.ReadAll(r)
 	require.NoError(t, err)
 	assert.EqualValues(t, "Hello World", string(b))
@@ -103,9 +113,11 @@ func TestReadXZ(t *testing.T) {
 
 func TestReadBZ2(t *testing.T) {
 	compressed := `QlpoOTFBWSZTWQZcidoAAACXgEAAAEAAgAYEkAAgADEMCCAxqRbEHUHi7kinChIAy5E7QA==`
-	r := base64.NewDecoder(base64.StdEncoding, strings.NewReader(compressed))
+	d := base64.NewDecoder(base64.StdEncoding, strings.NewReader(compressed))
 
-	r = NewAnyReader(r)
+	r, err := NewAnyReader(d)
+	assert.NoError(t, err)
+
 	b, err := ioutil.ReadAll(r)
 	require.NoError(t, err)
 	assert.EqualValues(t, "Hello World", string(b))
