@@ -71,9 +71,6 @@ func NewHTTPReader(url string) (*HTTPReader, error) {
 	return &HTTPReader{url: url}, nil
 }
 
-//func (b *HTTPReader) Peek(n int) ([]byte, error) {
-//}
-
 func (r *HTTPReader) Read(p []byte) (int, error) {
 	err := r.doRequest()
 	if err != nil {
