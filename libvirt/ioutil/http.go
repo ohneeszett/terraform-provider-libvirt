@@ -33,7 +33,7 @@ func (r *HTTPReader) SetIfModifiedSince(t time.Time) {
 }
 
 // Returns the length of the data according to server-side
-func (r *HTTPReader) Size() (uint64, error) {
+func (r *HTTPReader) Size() (int64, error) {
 	response, err := http.Head(r.url)
 	if err != nil {
 		return 0, err
@@ -64,7 +64,7 @@ func (r *HTTPReader) Size() (uint64, error) {
 			response.Header.Get("Content-Length"))
 		return 0, err
 	}
-	return uint64(length), nil
+	return int64(length), nil
 }
 
 func NewHTTPReader(url string) (*HTTPReader, error) {
