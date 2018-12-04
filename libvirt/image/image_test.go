@@ -6,6 +6,8 @@ import (
 	xioutil "github.com/dmacvicar/terraform-provider-libvirt/libvirt/ioutil"
 	"github.com/stretchr/testify/assert"
 	"io"
+	"net/http"
+	"net/http/httptest"
 	"testing"
 )
 
@@ -57,4 +59,18 @@ func TestImageRaw(t *testing.T) {
 	assert.NoError(t, err)
 	defer img.Close()
 	assert.Equal(t, img.Format, Raw)
+}
+
+func TestImageHTTP(t *testing.T) {
+	server := httptest.NewServer(
+		http.HandlerFunc(
+			func(w http.ResponseWriter, r *http.Request) {
+				http.ServeFile(w, r, "../testdata/"+r.URL.Path[1:])
+			}))
+	defer server.Close()
+
+	img, err := NewImageFromSource(server.URL + "/gzip/test.qcow2.gz")
+	assert.NoError(t, err)
+	defer img.Close()
+	assert.Equal(t, img.Format, QCOW2)
 }
