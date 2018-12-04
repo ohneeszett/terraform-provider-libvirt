@@ -2,12 +2,15 @@ package ioutil
 
 import (
 	"fmt"
+	"io"
 	"net/url"
 	"strings"
 )
 
 type URLReader interface {
-	closerSizedReader
+	io.Reader
+	io.Closer
+	Sized
 }
 
 func NewURLReader(src string) (URLReader, error) {
@@ -17,9 +20,17 @@ func NewURLReader(src string) (URLReader, error) {
 	}
 
 	if strings.HasPrefix(url.Scheme, "http") {
-		return NewHTTPReader(url.String())
+		r, err := NewHTTPReader(url.String())
+		if err != nil {
+			return nil, err
+		}
+		return r, nil
 	} else if url.Scheme == "file" || url.Scheme == "" {
-		return NewPathReader(url.Path)
+		r, err := NewPathReader(url.Path)
+		if err != nil {
+			return nil, err
+		}
+		return r, nil
 	} else {
 		return nil, fmt.Errorf("Don't know how to read from '%s': %s", url.String(), err)
 	}

@@ -22,6 +22,8 @@ import (
 	"compress/zlib"
 	"errors"
 	"io"
+	"io/ioutil"
+	"log"
 	"os"
 	"os/exec"
 )
@@ -43,31 +45,40 @@ const (
 )
 
 type AnyReader struct {
+	c       io.Closer
+	s       Sized
 	r       io.Reader
 	decided bool
 }
 
 func NewAnyReader(r io.Reader) (*AnyReader, error) {
-	return &AnyReader{r: r}, nil
+	c, _ := r.(io.Closer)
+	s, _ := r.(Sized)
+	return &AnyReader{r: r, c: c, s: s}, nil
 }
 
 func (r *AnyReader) Size() (int64, error) {
-	if r.r != nil {
-		sized, ok := (r.r).(sizedReader)
-		if ok {
-			return sized.Size()
-		}
+	if r.s != nil {
+		return r.s.Size()
 	}
 	return -1, ErrUnknownSize
 }
 
 func (r *AnyReader) Close() error {
-	if r.r != nil {
-		closer, ok := (r.r).(io.Closer)
-		if ok {
-			return closer.Close()
+	// close the compressed stream
+	cs, ok := r.r.(io.Closer)
+	if ok {
+		err := cs.Close()
+		if err != nil {
+			return err
 		}
 	}
+
+	// close the original stream
+	if r.c != nil {
+		return r.c.Close()
+	}
+	log.Printf("[WARN] %v can't be closed", r)
 	return nil
 }
 
@@ -97,16 +108,20 @@ func (r *AnyReader) decide() error {
 		return NotSupported
 	} else if b, err := peeker.Peek(len(gzipMagic)); err == nil && string(b) == gzipMagic {
 		// "gzip" format. https://tools.ietf.org/html/rfc1952
+		r.s = nil
 		r.r, err = gzip.NewReader(r.r)
 	} else if b, err := peeker.Peek(len(bzip2Magic)); err == nil && string(b) == bzip2Magic {
 		// "bz2" format.
+		r.s = nil
 		r.r = bzip2.NewReader(r.r)
 	} else if b, err := peeker.Peek(len(zlibMagic)); err == nil && string(b) == zlibMagic {
 		// "zlib" RFC 1950
+		r.s = nil
 		r.r, err = zlib.NewReader(r.r)
 	} else if b, err := peeker.Peek(len(lzipMagic)); err == nil && string(b) == lzipMagic {
 		return NotSupported
 	} else if b, err := peeker.Peek(len(xzMagic)); err == nil && string(b) == xzMagic {
+		r.s = nil
 		r.r = NewXZReader(r.r)
 	} else {
 		// It is not a known format. Assume no compression.
