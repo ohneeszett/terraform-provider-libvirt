@@ -25,10 +25,15 @@ type sized interface {
 	Size() (int64, error)
 }
 
+const (
+	qcow2Magic = "QFI\xfb\x00\x00\x00\x03"
+)
+
 type Image struct {
 	io.Reader
 	io.Closer
 	sized
+	Format Format
 }
 
 func NewImageFromSource(src string) (*Image, error) {
@@ -44,7 +49,17 @@ func NewImageFromSource(src string) (*Image, error) {
 		return nil, err
 	}
 
-	return &Image{bufio.NewReader(a), a, a}, nil
+	// figure out format
+	format := Raw
+	buf := bufio.NewReader(a)
+	b, err := buf.Peek(len(qcow2Magic))
+	if err != nil {
+		return nil, err
+	}
+	if string(b) == qcow2Magic {
+		format = QCOW2
+	}
+	return &Image{buf, a, a, format}, nil
 }
 
 func Import(src string, vol libvirtxml.StorageVolume) error {
