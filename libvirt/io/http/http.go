@@ -1,7 +1,6 @@
 package ioutil
 
 import (
-	"errors"
 	"fmt"
 	"log"
 	"net/http"
@@ -11,30 +10,18 @@ import (
 	"time"
 )
 
-var ErrNotModified = errors.New("http: Not modified")
-
 // The HTTP file allows to threat the full request-response cycle
 // as a reader.
 type File struct {
-	url             string
-	response        *http.Response
-	ifModifiedSince *time.Time
+	url      string
+	response *http.Response
 }
 
 func (r *File) String() string {
 	return r.url
 }
 
-// The reader will only download data if it was modified
-// server-side after the given time.
-//
-// If the data has not been modified since, reading will
-// return a ErrNotModified error.
-func (r *File) SetIfModifiedSince(t time.Time) {
-	*r.ifModifiedSince = t
-}
-
-// What Stat() returns
+// for Stat() return
 type httpFileInfo struct {
 	name    string
 	size    int64
@@ -51,7 +38,7 @@ func (fi httpFileInfo) ModTime() time.Time { return fi.modTime }
 func (fi httpFileInfo) IsDir() bool        { return fi.isDir }
 func (fi httpFileInfo) Sys() interface{}   { return nil }
 
-// Returns the header data using a HEAD request
+// Returns file meta-data using a HEAD request
 func getHeader(url string) (http.Header, error) {
 	response, err := http.Head(url)
 	if err != nil {
@@ -152,10 +139,6 @@ func (r *File) doRequest() error {
 		return fmt.Errorf("Error while downloading %s: %s", r.url, err)
 	}
 
-	if r.ifModifiedSince != nil {
-		req.Header.Set("If-Modified-Since", r.ifModifiedSince.UTC().Format(http.TimeFormat))
-	}
-
 	var response *http.Response
 	for retryCount := 0; retryCount < maxHTTPRetries; retryCount++ {
 		response, err = client.Do(req)
@@ -164,10 +147,7 @@ func (r *File) doRequest() error {
 		}
 
 		log.Printf("[DEBUG]: url resp status code %s (retry #%d)\n", response.Status, retryCount)
-		if response.StatusCode == http.StatusNotModified {
-			response.Body.Close()
-			return ErrNotModified
-		} else if response.StatusCode == http.StatusOK {
+		if response.StatusCode == http.StatusOK {
 			r.response = response
 			return nil
 		} else if response.StatusCode < 500 {

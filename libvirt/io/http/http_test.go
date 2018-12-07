@@ -85,13 +85,10 @@ func TestRemoteImageDownloadRetry(t *testing.T) {
 	defer reader.Close()
 
 	data, err = ioutil.ReadAll(reader)
-	if err != ErrNotModified {
-		t.Fatalf("Expected to fail with %v", ErrNotModified)
-	}
+	assert.Error(t, err)
 	if len(data) != 0 {
 		t.Fatalf("Expected not reading anything")
 	}
-
 }
 
 func TestHTTPStat(t *testing.T) {
