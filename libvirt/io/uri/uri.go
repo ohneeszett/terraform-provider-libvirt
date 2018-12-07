@@ -1,32 +1,28 @@
-package ioutil
+package uri
 
 import (
 	"fmt"
-	"io"
+	"github.com/dmacvicar/terraform-provider-libvirt/libvirt/io"
+	"github.com/dmacvicar/terraform-provider-libvirt/libvirt/io/http"
 	"net/url"
+	"os"
 	"strings"
 )
 
-type URLReader interface {
-	io.Reader
-	io.Closer
-	Sized
-}
-
-func NewURLReader(src string) (URLReader, error) {
+func Open(src string) (io.File, error) {
 	url, err := url.Parse(src)
 	if err != nil {
 		return nil, fmt.Errorf("Can't parse source '%s' as url: %s", src, err)
 	}
 
 	if strings.HasPrefix(url.Scheme, "http") {
-		r, err := NewHTTPReader(url.String())
+		r, err := http.Open(url.String())
 		if err != nil {
 			return nil, err
 		}
 		return r, nil
 	} else if url.Scheme == "file" || url.Scheme == "" {
-		r, err := NewPathReader(url.Path)
+		r, err := os.Open(url.Path)
 		if err != nil {
 			return nil, err
 		}
