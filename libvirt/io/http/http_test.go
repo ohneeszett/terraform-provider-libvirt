@@ -3,9 +3,11 @@ package ioutil
 import (
 	"bytes"
 	"fmt"
+	"github.com/stretchr/testify/assert"
 	"io/ioutil"
 	"net/http"
 	"net/http/httptest"
+	"os"
 	"testing"
 	"time"
 )
@@ -35,7 +37,7 @@ func TestRemoteImageDownloadRetry(t *testing.T) {
 	defer server.Close()
 
 	start := time.Now()
-	reader, err := NewHTTPReader(server.URL)
+	reader, err := Open(server.URL)
 	if err != nil {
 		t.Errorf("Could not create an HTTP reader: %v", err)
 	}
@@ -56,7 +58,7 @@ func TestRemoteImageDownloadRetry(t *testing.T) {
 	defer server.Close()
 
 	start = time.Now()
-	reader, err = NewHTTPReader(server.URL)
+	reader, err = Open(server.URL)
 	if err != nil {
 		t.Errorf("Could not create an HTTP reader: %v", err)
 	}
@@ -76,7 +78,7 @@ func TestRemoteImageDownloadRetry(t *testing.T) {
 	server = newErrorServer([]int{304})
 	defer server.Close()
 
-	reader, err = NewHTTPReader(server.URL)
+	reader, err = Open(server.URL)
 	if err != nil {
 		t.Errorf("Could not create an HTTP reader: %v", err)
 	}
@@ -90,4 +92,29 @@ func TestRemoteImageDownloadRetry(t *testing.T) {
 		t.Fatalf("Expected not reading anything")
 	}
 
+}
+
+func TestHTTPStat(t *testing.T) {
+	server := httptest.NewServer(
+		http.HandlerFunc(
+			func(w http.ResponseWriter, r *http.Request) {
+				http.ServeFile(w, r, "../../testdata/"+r.URL.Path[1:])
+			}))
+	defer server.Close()
+
+	f, err := Open(server.URL + "/gzip/test.qcow2.gz")
+	assert.NoError(t, err)
+	defer f.Close()
+
+	localFile, err := os.Open("....//testdata/gzip/test.qcow2.gz")
+	defer localFile.Close()
+	lfi, err := f.Stat()
+	assert.NoError(t, err)
+	assert.NotNil(t, lfi)
+
+	fi, err := f.Stat()
+	assert.NoError(t, err)
+	assert.NotNil(t, fi)
+	assert.Equal(t, lfi.Size(), fi.Size())
+	assert.Equal(t, lfi.ModTime(), fi.ModTime())
 }

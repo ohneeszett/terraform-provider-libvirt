@@ -5,21 +5,23 @@ import (
 	"fmt"
 	"log"
 	"net/http"
+	"net/url"
+	"os"
 	"strconv"
 	"time"
 )
 
 var ErrNotModified = errors.New("http: Not modified")
 
-// The HTTP reader allows to threat the full request-response cycle
+// The HTTP file allows to threat the full request-response cycle
 // as a reader.
-type HTTPReader struct {
+type File struct {
 	url             string
 	response        *http.Response
 	ifModifiedSince *time.Time
 }
 
-func (r *HTTPReader) String() string {
+func (r *File) String() string {
 	return r.url
 }
 
@@ -28,50 +30,96 @@ func (r *HTTPReader) String() string {
 //
 // If the data has not been modified since, reading will
 // return a ErrNotModified error.
-func (r *HTTPReader) SetIfModifiedSince(t time.Time) {
+func (r *File) SetIfModifiedSince(t time.Time) {
 	*r.ifModifiedSince = t
 }
 
-// Returns the length of the data according to server-side
-func (r *HTTPReader) Size() (int64, error) {
-	response, err := http.Head(r.url)
+// What Stat() returns
+type httpFileInfo struct {
+	name    string
+	size    int64
+	mode    os.FileMode
+	modTime time.Time
+	isDir   bool
+}
+
+// implement os.FileInfo
+func (fi httpFileInfo) Name() string       { return fi.name }
+func (fi httpFileInfo) Size() int64        { return fi.size }
+func (fi httpFileInfo) Mode() os.FileMode  { return fi.mode }
+func (fi httpFileInfo) ModTime() time.Time { return fi.modTime }
+func (fi httpFileInfo) IsDir() bool        { return fi.isDir }
+func (fi httpFileInfo) Sys() interface{}   { return nil }
+
+// Returns the header data using a HEAD request
+func getHeader(url string) (http.Header, error) {
+	response, err := http.Head(url)
 	if err != nil {
-		return 0, err
+		return nil, err
 	}
 	if response.StatusCode == 403 {
 		// possibly only the HEAD method is forbidden, try a Body-less GET instead
-		response, err = http.Get(r.url)
+		response, err = http.Get(url)
 		if err != nil {
-			return 0, err
+			return nil, err
 		}
 
 		response.Body.Close()
 	}
 	if response.StatusCode != 200 {
-		return 0,
+		return nil,
 			fmt.Errorf(
 				"Error accessing remote resource: %s - %s",
-				r.url,
+				url,
 				response.Status)
 	}
+	return response.Header, nil
+}
 
-	length, err := strconv.Atoi(response.Header.Get("Content-Length"))
+func httpStat(urlS string) (os.FileInfo, error) {
+	header, err := getHeader(urlS)
+	if err != nil {
+		return nil, err
+	}
+
+	url, err := url.Parse(urlS)
+	if err != nil {
+		return nil, fmt.Errorf("Can't parse source '%s' as url: %s", urlS, err)
+	}
+
+	fi := httpFileInfo{}
+	fi.name = url.Path
+	fi.size, err = strconv.ParseInt(header.Get("Content-Length"), 10, 0)
 	if err != nil {
 		err = fmt.Errorf(
-			"Error while getting Content-Length of \"%s\": %s - got %s",
-			r.url,
+			"Error while parsing Content-Length of \"%s\": %s - got %s",
+			url,
 			err,
-			response.Header.Get("Content-Length"))
-		return 0, err
+			header.Get("Content-Length"))
+		return nil, err
 	}
-	return int64(length), nil
+
+	fi.modTime, err = http.ParseTime(header.Get("Last-Modified"))
+	if err != nil {
+		err = fmt.Errorf(
+			"Error while parsing Last-Modified of \"%s\": %s - got %s",
+			url,
+			err,
+			header.Get("Last-Modified"))
+		return nil, err
+	}
+	return &fi, nil
 }
 
-func NewHTTPReader(url string) (*HTTPReader, error) {
-	return &HTTPReader{url: url}, nil
+func Open(url string) (*File, error) {
+	return &File{url: url}, nil
 }
 
-func (r *HTTPReader) Read(p []byte) (int, error) {
+func (r *File) Stat() (os.FileInfo, error) {
+	return httpStat(r.url)
+}
+
+func (r *File) Read(p []byte) (int, error) {
 	err := r.doRequest()
 	if err != nil {
 		return 0, err
@@ -79,14 +127,14 @@ func (r *HTTPReader) Read(p []byte) (int, error) {
 	return r.response.Body.Read(p)
 }
 
-func (r *HTTPReader) Close() error {
+func (r *File) Close() error {
 	if r.response != nil {
 		return r.response.Body.Close()
 	}
 	return nil
 }
 
-func (r *HTTPReader) doRequest() error {
+func (r *File) doRequest() error {
 	if r.response != nil {
 		return nil
 	}
