@@ -22,9 +22,10 @@ import (
 	"compress/zlib"
 	"errors"
 	"io"
-	"log"
 	"os"
 	"os/exec"
+
+	xio "github.com/dmacvicar/terraform-provider-libvirt/libvirt/io"
 )
 
 var NotSupported = errors.New("The file type is not yet supported")
@@ -44,86 +45,90 @@ const (
 )
 
 type AnyReader struct {
-	c       io.Closer
-	s       Sized
-	r       io.Reader
-	decided bool
+	io.Reader
+	filter    io.Reader
+	sizeKnown bool
 }
 
 func NewAnyReader(r io.Reader) (*AnyReader, error) {
-	c, _ := r.(io.Closer)
-	s, _ := r.(Sized)
-	return &AnyReader{r: r, c: c, s: s}, nil
+	return &AnyReader{r, nil, false}, nil
 }
 
-func (r *AnyReader) Size() (int64, error) {
-	if r.s != nil {
-		return r.s.Size()
+// for Stat() return
+type anyFileInfo struct {
+	os.FileInfo
+	sizeKnown bool
+}
+
+// Size is the size of the source if the file is not
+// compressed. In that case, we don't know.
+func (fi anyFileInfo) Size() int64 {
+	if fi.sizeKnown {
+		return fi.FileInfo.Size()
 	}
-	return -1, ErrUnknownSize
+	return int64(-1)
 }
 
-func (r *AnyReader) Close() error {
-	// close the compressed stream
-	cs, ok := r.r.(io.Closer)
+func (a *AnyReader) Stat() (os.FileInfo, error) {
+	f, ok := (a.Reader).(xio.File)
 	if ok {
-		err := cs.Close()
+		fi, err := f.Stat()
 		if err != nil {
-			return err
+			return nil, err
 		}
+		afi := anyFileInfo{fi, a.sizeKnown}
+		return &afi, nil
 	}
+	return nil, NotSupported
+}
 
-	// close the original stream
-	if r.c != nil {
-		return r.c.Close()
+func (a *AnyReader) Close() error {
+	f, ok := (a.Reader).(xio.File)
+	if ok {
+		return f.Close()
 	}
-	log.Printf("[WARN] %v can't be closed", r)
+	// no op
 	return nil
 }
 
-func (r *AnyReader) Read(b []byte) (n int, err error) {
-	if !r.decided {
-		err = r.decide()
+func (a *AnyReader) Read(b []byte) (n int, err error) {
+	if a.filter == nil {
+		err = a.decide()
 		if err != nil {
 			return 0, err
 		}
 	}
-
-	return r.r.Read(b)
+	return a.filter.Read(b)
 }
 
-func (r *AnyReader) decide() error {
+func (a *AnyReader) decide() error {
 	var err error
-	if r.decided {
+	if a.filter != nil {
 		return nil
 	}
 
-	peeker := bufio.NewReader(r.r)
-	r.r = peeker
-	r.decided = true
+	peeker := bufio.NewReader(a.Reader)
+	a.filter = peeker
 
 	if b, err := peeker.Peek(len(compressMagic)); err == nil && string(b) == compressMagic {
 		// "compress" format. https://en.wikipedia.org/wiki/Lempel-Ziv-Welch
 		return NotSupported
 	} else if b, err := peeker.Peek(len(gzipMagic)); err == nil && string(b) == gzipMagic {
 		// "gzip" format. https://tools.ietf.org/html/rfc1952
-		r.s = nil
-		r.r, err = gzip.NewReader(r.r)
+		a.filter, err = gzip.NewReader(a.filter)
 	} else if b, err := peeker.Peek(len(bzip2Magic)); err == nil && string(b) == bzip2Magic {
 		// "bz2" format.
-		r.s = nil
-		r.r = bzip2.NewReader(r.r)
+		a.filter = bzip2.NewReader(a.filter)
 	} else if b, err := peeker.Peek(len(zlibMagic)); err == nil && string(b) == zlibMagic {
 		// "zlib" RFC 1950
-		r.s = nil
-		r.r, err = zlib.NewReader(r.r)
+		a.filter, err = zlib.NewReader(a.filter)
 	} else if b, err := peeker.Peek(len(lzipMagic)); err == nil && string(b) == lzipMagic {
 		return NotSupported
 	} else if b, err := peeker.Peek(len(xzMagic)); err == nil && string(b) == xzMagic {
-		r.s = nil
-		r.r = NewXZReader(r.r)
+		a.filter = NewXZReader(a.filter)
 	} else {
 		// It is not a known format. Assume no compression.
+		a.sizeKnown = true
 	}
 
 	return err
@@ -133,25 +138,25 @@ func (r *AnyReader) decide() error {
 // Note that for convenience this is done by piping the input through an invocation
 // of the `xz` command.
 func NewXZReader(r io.Reader) io.Reader {
-	return NewPipeReader(r, "xzcat")
+	return NewFilterReader(r, "xzcat")
 }
 
 func NewGZIPReader(r io.Reader) io.Reader {
-	return NewPipeReader(r, "zcat")
+	return NewFilterReader(r, "zcat")
 }
 
-func NewPipeReader(r io.Reader, cmdName string, args ...string) io.ReadCloser {
-	rpipe, wpipe := io.Pipe()
+func NewFilterReader(r io.Reader, cmdName string, args ...string) io.ReadCloser {
+	rfilter, wfilter := io.Pipe()
 
 	cmd := exec.Command(cmdName, args...)
 	cmd.Stderr = os.Stderr
 	cmd.Stdin = r
-	cmd.Stdout = wpipe
+	cmd.Stdout = wfilter
 
 	go func() {
 		err := cmd.Run()
-		wpipe.CloseWithError(err)
+		wfilter.CloseWithError(err)
 	}()
 
-	return rpipe
+	return rfilter
 }

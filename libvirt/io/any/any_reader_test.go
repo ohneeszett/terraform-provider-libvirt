@@ -27,6 +27,7 @@ import (
 
 	"encoding/base64"
 
+	"github.com/dmacvicar/terraform-provider-libvirt/libvirt/io/uri"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
@@ -44,6 +45,10 @@ func TestReadPlain(t *testing.T) {
 	const str = "HelloWorld"
 	r, err := NewAnyReader(strings.NewReader(str))
 	assert.NoError(t, err)
+
+	_, err = r.Stat()
+	assert.Error(t, err)
+	assert.Equal(t, NotSupported, err)
 
 	b := make([]byte, len(str)+12)
 	n, err := r.Read(b)
@@ -121,4 +126,26 @@ func TestReadBZ2(t *testing.T) {
 	b, err := ioutil.ReadAll(r)
 	require.NoError(t, err)
 	assert.EqualValues(t, "Hello World", string(b))
+}
+
+func TestAnyReaderFileCompressed(t *testing.T) {
+	f, err := uri.Open("../../testdata/gzip/test.qcow2.gz")
+	assert.NoError(t, err)
+	any, err := NewAnyReader(f)
+	defer any.Close()
+
+	fi, err := any.Stat()
+	assert.NoError(t, err)
+	assert.Equal(t, int64(-1), fi.Size())
+}
+
+func TestAnyReaderFile(t *testing.T) {
+	f, err := uri.Open("../../testdata/test.qcow2")
+	assert.NoError(t, err)
+	any, err := NewAnyReader(f)
+	defer any.Close()
+
+	fi, err := any.Stat()
+	assert.NoError(t, err)
+	assert.Equal(t, int64(-1), fi.Size())
 }
