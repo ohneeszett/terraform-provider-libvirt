@@ -3,7 +3,6 @@ package image
 import (
 	"crypto/sha256"
 	"fmt"
-	xioutil "github.com/dmacvicar/terraform-provider-libvirt/libvirt/ioutil"
 	"github.com/stretchr/testify/assert"
 	"io"
 	"net/http"
@@ -17,10 +16,10 @@ const (
 )
 
 func TestImageUnCompressed(t *testing.T) {
-	img, err := NewImageFromSource("../testdata/test.qcow2")
+	img, err := Open("../../testdata/test.qcow2")
+	assert.NoError(t, err)
 	defer img.Close()
 
-	assert.NoError(t, err)
 	h := sha256.New()
 
 	if _, err := io.Copy(h, img); err != nil {
@@ -28,13 +27,14 @@ func TestImageUnCompressed(t *testing.T) {
 	}
 	assert.Equal(t, testQcow2Sha256, fmt.Sprintf("%x", h.Sum(nil)))
 
-	size, err := img.Size()
+	fi, err := img.Stat()
 	assert.NoError(t, err)
-	assert.Equal(t, int64(testQcow2Size), size)
+	assert.Equal(t, int64(testQcow2Size), fi.Size())
+	assert.Equal(t, img.Format, QCOW2)
 }
 
 func TestImageCompressed(t *testing.T) {
-	img, err := NewImageFromSource("../testdata/gzip/test.qcow2.gz")
+	img, err := Open("../../testdata/gzip/test.qcow2.gz")
 	assert.NoError(t, err)
 	defer img.Close()
 
@@ -46,16 +46,14 @@ func TestImageCompressed(t *testing.T) {
 	}
 	assert.Equal(t, testQcow2Sha256, fmt.Sprintf("%x", h.Sum(nil)))
 
-	size, err := img.Size()
-	assert.Error(t, err)
-	assert.Equal(t, size, int64(-1))
-	assert.Equal(t, err, xioutil.ErrUnknownSize)
-
+	fi, err := img.Stat()
+	assert.NoError(t, err)
+	assert.Equal(t, int64(-1), fi.Size())
 	assert.Equal(t, img.Format, QCOW2)
 }
 
 func TestImageRaw(t *testing.T) {
-	img, err := NewImageFromSource("../testdata/tcl.iso")
+	img, err := Open("../../testdata/tcl.iso")
 	assert.NoError(t, err)
 	defer img.Close()
 	assert.Equal(t, img.Format, Raw)
@@ -69,7 +67,7 @@ func TestImageHTTP(t *testing.T) {
 			}))
 	defer server.Close()
 
-	img, err := NewImageFromSource(server.URL + "/gzip/test.qcow2.gz")
+	img, err := Open(server.URL + "/gzip/test.qcow2.gz")
 	assert.NoError(t, err)
 	defer img.Close()
 	assert.Equal(t, img.Format, QCOW2)

@@ -1,57 +1,48 @@
 package image
 
 import (
-	"bufio"
-	xioutil "github.com/dmacvicar/terraform-provider-libvirt/libvirt/ioutil"
+	uri "github.com/dmacvicar/terraform-provider-libvirt/libvirt/io/uri"
+	xio "github.com/dmacvicar/terraform-provider-libvirt/libvirt/io"
+	any "github.com/dmacvicar/terraform-provider-libvirt/libvirt/io/any"
+
 	"github.com/libvirt/libvirt-go-xml"
-	"io"
 )
 
 type Format int
-
 const (
 	QCOW2 Format = iota
 	Raw
 )
-
-type Source int
-
-const (
-	File = iota
-	Vagrant
-)
-
-type sized interface {
-	Size() (int64, error)
-}
 
 const (
 	qcow2Magic = "QFI\xfb\x00\x00\x00\x03"
 )
 
 type Image struct {
-	io.Reader
-	io.Closer
-	sized
+	xio.File
 	Format Format
 }
 
-func NewImageFromSource(src string) (*Image, error) {
+func Open(src string) (*Image, error) {
 	// network transparent reader
-	r, err := xioutil.NewURLReader(src)
+	f, err := uri.Open(src)
 	if err != nil {
 		return nil, err
 	}
 
 	// compression
-	a, err := xioutil.NewAnyReader(r)
+	a, err := any.NewAnyReader(f)
 	if err != nil {
 		return nil, err
 	}
 
 	// figure out format
 	format := Raw
-	buf := bufio.NewReader(a)
+	buf, err := xio.NewBuffer(a)
+	if err != nil {
+		return nil, err
+	}
+
 	b, err := buf.Peek(len(qcow2Magic))
 	if err != nil {
 		return nil, err
@@ -59,7 +50,7 @@ func NewImageFromSource(src string) (*Image, error) {
 	if string(b) == qcow2Magic {
 		format = QCOW2
 	}
-	return &Image{buf, a, a, format}, nil
+	return &Image{buf, format}, nil
 }
 
 func Import(src string, vol libvirtxml.StorageVolume) error {
